@@ -1,0 +1,8 @@
+NGINX load balancer is defaulted to round robin.
+(default - http://127.0.0.1/)
+
+ref: https://www.geeksforgeeks.org/load-balancing-flask-application-using-nginx-and-docker/
+
+
+links:
+    - https://stackoverflow.com/questions/18071652/handling-http-requests-with-c-in-nginx
