@@ -1,5 +1,5 @@
 from app import app
-import applib
+from applib import applib
 
 result = applib.multiply(2, 3)
 print(result)

@@ -1,35 +1,38 @@
-# FROM python:3-alpine
+FROM python:3-alpine
 
-# EXPOSE 5000
+EXPOSE 5000
 
-# RUN apk add --virtual .build-dependencies \ 
-#             --no-cache \
-#             python3-dev \
-#             build-base \
-#             linux-headers \
-#             pcre-dev
+RUN apk upgrade --no-cache && \
+    apk add --virtual .build-dependencies \ 
+            --no-cache \
+            python3-dev \
+            build-base \
+            linux-headers \
+            pcre-dev \
+            maturin \
+            curl \
+            build-base \
+            gcc \
+            rustup \
+            postgresql-client \
+            bash \
+            openssl \
+            libgcc \
+            libstdc++ \
+            ncurses-libs \
+            pcre
 
-# RUN apk add --no-cache pcre
+ENV VIRTUAL_ENV=/opt/venv
+RUN python3 -m venv $VIRTUAL_ENV
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
-# WORKDIR /app
-# COPY requirements.txt .
-# RUN pip3 install -r requirements.txt
-# COPY . .
-
-# RUN apk del .build-dependencies && rm -rf /var/cache/apk/*
-
-# CMD ["uwsgi", "--ini", "/app/wsgi.ini"]
-
-FROM rust:latest
-
-RUN apt-get update -y
-RUN apt-get install -y python3-pip python-dev build-essential python3-venv
-RUN pip3 install --upgrade pip
+RUN rustup-init -y
+ENV PATH="/root/.cargo/bin:${PATH}"
 
 WORKDIR /app
 COPY requirements.txt .
 RUN pip3 install -r requirements.txt
 COPY . .
 
-RUN maturin build
+RUN maturin develop
 CMD ["uwsgi", "--ini", "/app/wsgi.ini"]
