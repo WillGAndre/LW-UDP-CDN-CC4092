@@ -8,6 +8,9 @@ use std::net::SocketAddr;
 use hyper::{Body, Request, Response, Server};
 use hyper::service::{make_service_fn, service_fn};
 
+use tokio::net::UdpSocket;
+use std::io;
+
 static KEY: &str = "AIzaSyCQ65jgh0Xzkdg2u-ev5TZJz7CtUlqghYo";
 static BUCKETNAME: &str = "bucketasc";
 static ACCOUNTCREDS : &str = "accountCreds.json";
@@ -25,27 +28,29 @@ async fn handle(_req: Request<Body>) -> Result<Response<Body>, Infallible> {
 
 
 #[tokio::main]
-async fn main() {
+async fn main()  {
     //collect args
     let _args: Vec<String> = env::args().collect();
     //dbg!(args);
 
+    let port = match std::env::var("PORT"){
+        Ok(port) => port,
+        _ => String::from("8080")
+    };
 
-    // Construct our SocketAddr to listen on...
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    let address = format!("0.0.0.0:{}", port);
 
-    // And a MakeService to handle each connection...
-    let make_service = make_service_fn(|_conn| async {
-        Ok::<_, Infallible>(service_fn(handle))
-    });
+    let sock = UdpSocket::bind(address.clone()).await.unwrap();
+    let mut buf = [0; 1024];
 
-    // Then bind and serve...
-    let server = Server::bind(&addr).serve(make_service);
+    loop {
+        let (len, addr) = sock.recv_from(&mut buf).await.unwrap();
+        println!("{:?} bytes received from {:?}", len, addr);
 
-    // And run forever...
-    if let Err(e) = server.await {
-        eprintln!("server error: {}", e);
+        let len = sock.send_to(&buf[..len], addr).await.unwrap();
+        println!("{:?} bytes sent", len);
     }
+
 
 }
 
