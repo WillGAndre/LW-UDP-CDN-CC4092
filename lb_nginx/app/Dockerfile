@@ -20,7 +20,8 @@ RUN apk upgrade --no-cache && \
             libgcc \
             libstdc++ \
             ncurses-libs \
-            pcre
+            pcre \
+            libmemcached-dev
 
 ENV VIRTUAL_ENV=/opt/venv
 RUN python3 -m venv $VIRTUAL_ENV
@@ -34,5 +35,4 @@ COPY requirements.txt .
 RUN pip3 install -r requirements.txt
 COPY . .
 
-RUN maturin develop
 CMD ["uwsgi", "--ini", "/app/wsgi.ini"]

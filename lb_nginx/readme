@@ -1,4 +1,6 @@
 NGINX load balancer is defaulted to round robin.
+Currently supports caching using pymemcache, caching could also be done using the google.appengine 
+(https://codelabs.developers.google.com/codelabs/cloud-gae-python-migrate-12-memcache#4)
 (default - http://127.0.0.1/)
 
 Currently using uWSGI, check refs.

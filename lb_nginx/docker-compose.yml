@@ -3,6 +3,9 @@ version: '3.7'
 services:
   app:
     build: app
+    depends_on:
+      - memcached
+
   nginx:
     container_name: nginx
     build: nginx
@@ -10,3 +13,9 @@ services:
       - 80:80
     depends_on:
       - app
+
+  memcached:
+    image: memcached:alpine
+    ports:
+      - 11211:11211
+    command: ["memcached"]
