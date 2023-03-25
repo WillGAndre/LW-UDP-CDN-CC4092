@@ -511,8 +511,9 @@ name = "node"
 version = "0.1.0"
 dependencies = [
  "gcp_auth",
- "hyper",
  "reqwest",
+ "serde",
+ "serde_json",
  "tokio",
 ]
 

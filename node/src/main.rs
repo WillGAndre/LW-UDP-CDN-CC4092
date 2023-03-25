@@ -2,43 +2,46 @@ use gcp_auth::{AuthenticationManager, CustomServiceAccount};
 use reqwest::Client;
 use std::path::PathBuf;
 use std::env;
+use std::fs::File;
+use std::io::Cursor;
 
 use std::convert::Infallible;
 use std::net::SocketAddr;
-use hyper::{Body, Request, Response, Server};
-use hyper::service::{make_service_fn, service_fn};
 
 use tokio::net::UdpSocket;
 use std::io;
+
+use serde_json::json;
+use serde::{Deserialize, Serialize};
 
 static KEY: &str = "AIzaSyCQ65jgh0Xzkdg2u-ev5TZJz7CtUlqghYo";
 static BUCKETNAME: &str = "bucketasc";
 static ACCOUNTCREDS : &str = "accountCreds.json";
 
-
-async fn handle(_req: Request<Body>) -> Result<Response<Body>, Infallible> {
-    println!("{:?}", _req);
-
-    let token = get_token().await;
-    let req = get_bucket_info(token).await;
-
-    Ok(Response::new(Body::from(req.unwrap())))
+#[derive(Serialize, Deserialize)]
+struct Attributes {
+    externalip : String,
+    region : String,
 }
 
 
 #[tokio::main]
 async fn main()  {
     
-    println!("getting node external ip");
+    println!("getting node external ip and region");
     let extip = get_node_extip().await.unwrap();
-    println!("getting node region");
     let reg = get_node_region().await.unwrap();
-
     println!("ip : {} Region : {}", extip, reg);
 
+    let attributes = Attributes {
+        externalip : extip,
+        region : reg
+    };
+
     //collect args
-    let _args: Vec<String> = env::args().collect();
+    // let _args: Vec<String> = env::args().collect();
     //dbg!(args);
+
 
     let port = match std::env::var("PORT"){
         Ok(port) => port,
@@ -50,17 +53,18 @@ async fn main()  {
     let sock = UdpSocket::bind(address.clone()).await.unwrap();
     let mut buf = [0; 1024];
 
+
     loop {
         let (len, addr) = sock.recv_from(&mut buf).await.unwrap();
         println!("{:?} bytes received from {:?}", len, addr);
 
-        let msg = format!("{{extip : {} , region : {} }}", extip, reg);
-        let len = sock.send_to(&msg.as_bytes(), addr).await.unwrap();
-        println!("MSG - {} - SENT", msg);
+        let serialized = serde_json::to_string(&attributes).unwrap();
+
+        let len = sock.send_to(&serialized.as_bytes(), addr).await.unwrap();
+        println!("MSG - {} - SENT", serialized);
     }
-
-
 }
+
 
 async fn get_node_extip() -> Result<String, reqwest::Error>{
     let url = "http://metadata/computeMetadata/v1/instance/network-interfaces/0/access-configs/0/external-ip";
@@ -96,6 +100,20 @@ async fn get_token() -> String {
     return String::from(token.as_str());
 }
 
+async fn bucket_request_example() -> String{
+
+    let token = get_token().await;
+    let req = get_bucket_info(token.clone()).await.unwrap();
+    let req2 = list_bucket(token.clone()).await.unwrap();
+    //let req3 = get_bucket_info(token).await.unwrap();
+
+    println!("{}", req);
+    println!("{}", req2);
+    //println!("{:?}", req3);
+    return "asd".to_string();
+}
+
+
 
 async fn get_bucket_info(token: String) -> Result<String, reqwest::Error>{
     let url = format!("https://storage.googleapis.com/storage/v1/b/{}/?key={}", BUCKETNAME, KEY);
@@ -109,31 +127,30 @@ async fn get_bucket_info(token: String) -> Result<String, reqwest::Error>{
 
 }
 
-// // Lists all objects in the bucket
-// async fn list_bucket(token: String) -> Result<String, reqwest::Error>{
-//     let url = format!("GET https://storage.googleapis.com/storage/v1/b/{}/o?key={}", BUCKETNAME, KEY);
-//     let client = Client::new();
-//     let res = client
-//         .get(url)
-//         .bearer_auth(token)
-//         .send().await.unwrap();
-//     let response = res.text().await;
-//     return response;
-// }
+// Lists all objects in the bucket
+async fn list_bucket(token: String) -> Result<String, reqwest::Error>{
+    let url = format!("https://storage.googleapis.com/storage/v1/b/{}/o?key={}", BUCKETNAME, KEY);
+    let client = Client::new();
+    let res = client
+        .get(url)
+        .bearer_auth(token)
+        .send().await.unwrap();
+    let response = res.text().await;
+    return response;
+}
 
 
-// //Read file from string path
+//Read file from string path
 // fn parse_file(path : String) -> Vec<u8>{
 //     let mut bytes: Vec<u8> = Vec::new();
-//     for byte in File::open(format!("{}", path))?.bytes() {
-//         bytes.push(byte?)
+//     for byte in File::open(format!("{}", path)).bytes() {
+//         bytes.push(byte)
 //     }
 //     return bytes;
 // }
 
 // // Upload a new object to the bucket
 // async fn upload_bucket(file: Vec<u8>, token: String) -> Result<String, reqwest::Error>{
-//     //TODO, not finished
 //     let name : String = "nameofobject";
 
 //     //MEDIA ONLY, can be multipart
@@ -149,7 +166,7 @@ async fn get_bucket_info(token: String) -> Result<String, reqwest::Error>{
 //     return response;
 // }
 
-// async fn download_bucket(obj_name: String, destination_path: String, token: String) -> Vec<u8>{
+// async fn download_bucket(obj_name: String, destination_path: String, token: String) -> String{
 //     let mut downloaded : Vec<u8> = Vec::new();
 
 //     let url = format!("GET https://storage.googleapis.com/storage/v1/b/{}/o/{}?key={}", BUCKETNAME, obj_name, KEY);
@@ -158,18 +175,20 @@ async fn get_bucket_info(token: String) -> Result<String, reqwest::Error>{
 //         .post(url)
 //         .bearer_auth(token)
 //         .send().await.unwrap();
-//     let response = res.text().await;
-//     return response;
-
+//     let response = res.bytes().await;
+//     let mut content = Cursor::new(response);
+//     let mut file = std::fs::File::create(file_name);
+//     std::io::copy(&mut content, &mut file);
+//     "".to_string()
 // }
 
-// async fn delete_from_bucket(obj_name: String, token: String ) -> Result<String, reqwest::Error>{
-//     let url = format!("https://storage.googleapis.com/storage/v1/b/{}/?key={}", BUCKETNAME, KEY);
-//     let client = Client::new();
-//     let res = client
-//         .delete(url)
-//         .bearer_auth(token)
-//         .send().await.unwrap();
-//     let response = res.text().await;
-//     return response;
-// }
+async fn delete_from_bucket(obj_name: String, token: String ) -> Result<String, reqwest::Error>{
+    let url = format!("https://storage.googleapis.com/storage/v1/b/{}/?key={}", BUCKETNAME, KEY);
+    let client = Client::new();
+    let res = client
+        .delete(url)
+        .bearer_auth(token)
+        .send().await.unwrap();
+    let response = res.text().await;
+    return response;
+}
