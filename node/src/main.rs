@@ -53,6 +53,7 @@ async fn main()  {
     let sock = UdpSocket::bind(address.clone()).await.unwrap();
     let mut buf = [0; 1024];
 
+    
 
     loop {
         let (len, addr) = sock.recv_from(&mut buf).await.unwrap();
@@ -64,6 +65,7 @@ async fn main()  {
         println!("MSG - {} - SENT", serialized);
     }
 }
+
 
 
 async fn get_node_extip() -> Result<String, reqwest::Error>{
