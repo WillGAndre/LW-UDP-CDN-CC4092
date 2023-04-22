@@ -1,17 +1,20 @@
 import requests
 import os;
 import socket;
+import nodeListener
 
-KEY = "AIzaSyCQ65jgh0Xzkdg2u-ev5TZJz7CtUlqghYo"
-BUCKETNAME ="bucketasc"
-ACCOUNTCREDS = "accountCreds.json"
+# KEY = "AIzaSyCQ65jgh0Xzkdg2u-ev5TZJz7CtUlqghYo"
+# BUCKETNAME ="bucketasc"
+# ACCOUNTCREDS = "accountCreds.json"
 
 
 class Node:
     def __init__(self):
-        self.externalip = self.get_extip()
-        self.region = self.get_region()
-        self.port = self.getport()
+        #self.externalip = self.get_extip()
+        #self.region = self.get_region()
+        #self.port = self.getport()
+        self.node = ""
+        
 
     def get_port(self):
         os.environ.get('PORT', 8080)
@@ -33,3 +36,10 @@ class Node:
         ##todo if status code good   
         return response.json
     
+    def openListener(self):
+        listen = nodeListener.Listener()
+
+if __name__ == "__main__":
+
+    node = Node()
+    node.openListener()

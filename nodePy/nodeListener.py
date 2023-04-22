@@ -1,5 +1,6 @@
 import socket
 import os
+import nodeSender
 
 class Listener:
     def __init__(self):
@@ -11,14 +12,18 @@ class Listener:
     
     def listen(self):
         while True:
-            data, addr = self.socket.recvfrom(1024)
+            data, addr = self.sock.recvfrom(1024)
             self.handler(data, addr)
 
     def handler(self, data, addr):
         print("recieved : %s from %s" % (data , addr))
+        sender = nodeSender.Sender()
+        sender.simpleMsg(addr, b'123')
+
 
         ##switch message (get, post, delete)
 
         ##call bucket control
 
         ##send feedback/file with nodeSender
+    

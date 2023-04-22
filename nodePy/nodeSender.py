@@ -6,9 +6,9 @@ class Sender:
         self.IP = "0.0.0.0"
         self.PORT = os.environ.get('PORT', 8080)
 
-    def simpleMsg(self, msg):
+    def simpleMsg(self, addr, msg):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.sendto(msg, (self.IP, self.PORT))
+        sock.sendto(msg, addr)
 
     ##def sendFile
     ##def sendCode
