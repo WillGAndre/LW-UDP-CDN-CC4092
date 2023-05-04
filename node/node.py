@@ -1,11 +1,8 @@
 import requests
-import os;
-import socket;
+import os
+import socket
 import nodeListener
 
-# KEY = "AIzaSyCQ65jgh0Xzkdg2u-ev5TZJz7CtUlqghYo"
-# BUCKETNAME ="bucketasc"
-# ACCOUNTCREDS = "accountCreds.json"
 
 
 class Node:

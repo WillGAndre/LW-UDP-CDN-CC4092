@@ -6,8 +6,9 @@ class Sender:
         self.IP = "0.0.0.0"
         self.PORT = os.environ.get('PORT', 8080)
 
-    def simpleMsg(self, addr, msg):
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    def simpleMsg(self, sock, addr, msg):
+        print("sending " + str(msg) +"to " + addr[0] +":" + str(addr[1]))
+        
         sock.sendto(msg, addr)
 
     ##def sendFile

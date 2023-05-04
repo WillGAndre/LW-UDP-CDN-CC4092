@@ -14,8 +14,11 @@ class Bucket:
     # List all objects in the bucket
     def list(self):
         print(f"Objects in bucket {self.bucket_name}:")
+        objs = []
         for blob in self.bucket.list_blobs():
             print(f" - {blob.name}")
+            objs.append(blob.name)
+        return objs
 
     # Upload a new object to the bucket
     def insert(self, file_path):
