@@ -8,8 +8,8 @@
 
 list
 
-get FileName
+get FileName (todo transfer file)
 
-insert
+insert (todo transfer file)
 
-delete FileName
+delete FileName (todo - not working with wrong filename)
