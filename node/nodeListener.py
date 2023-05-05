@@ -11,36 +11,49 @@ class Listener:
         self.sock.bind((self.IP, self.PORT))
         self.listen()
     
+    # Server listening loop
     def listen(self):
-        print("waiting on recieve")
+        print("Node listening on port %s" %self.PORT)
+        
         while True:
-
             data, addr = self.sock.recvfrom(1024)
             self.handler(data, addr)
 
+    # Handle data recieved
     def handler(self, data, addr):
         print("recieved : %s from %s" % (data , addr))
 
+        # Create bucket control to handle commands
         bucket = bucketControl.Bucket()
+
+        # Sender used to send messages and files.
         sender = nodeSender.Sender()
 
-        ##todo if error
-        print(str(data), str(data).startswith("b'delete"))
-        if (data == b'list\n'):
-            data = bucket.list()
-            sender.simpleMsg(self.sock, addr, ("200: %s\n" % data).encode())
-        elif (str(data).startswith("b'delete")):
-            #todo delete filename
-            #data = bucket.delete()
+        #POSSIBLE COMMANDS
+        # list insert, get, delete
+        # sends success/error message with data
+        #TODO return error messages
+
+        msg = data.rstrip().decode('ASCII')
+        if (msg == "list"):
+            rq = bucket.list()
+            sender.simpleMsg(self.sock, addr, ("200: %s\n" % rq).encode())
+
+        elif (msg.startswith("delete")):
+            #TODO check if filename is actually there
+            filename = msg.split(" ")[1]
+            rq = bucket.delete(filename)
             sender.simpleMsg(self.sock, addr, "200\n".encode())
 
-            # case "insert":
-            #     sender.simpleMsg(self.sock, addr, "")
-            # case "get":
-            
-            # case "delete"
-        else:
+        elif (msg.startswith("insert")):
+            #TODO wait for file to be sent in another message
+            sender.simpleMsg(self.sock, addr, "ready\n".encode())
 
+        elif (msg.startswith("get")):
+            #TODO get actual file and send
+            filename = msg.split(" ")[1]
+            sender.simpleMsg(self.sock, addr, ("getting %s\n" %filename ).encode())
+        else:
             sender.simpleMsg(self.sock, addr, "Command undefined\n".encode())
 
 
