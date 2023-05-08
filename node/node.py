@@ -1,7 +1,6 @@
 import requests
-import os
-import socket
 import nodeListener
+import sys
 
 
 
@@ -37,6 +36,8 @@ class Node:
         listen = nodeListener.Listener()
 
 if __name__ == "__main__":
-
+    #TODO make sure its an IP
+    if len(sys.argv)>1:
+        print(sys.argv[1])
     node = Node()
     node.openListener()
