@@ -5,6 +5,9 @@ import os
 import threading
 from google.cloud import storage
 import uuid
+import logging
+
+
 
 class Listener:
     def __init__(self, node):
@@ -53,17 +56,15 @@ class Listener:
 
         elif (msg[0] == "delete"):
             #TODO check if filename is actually there
-            filename = msg.split(" ")[1]
+            filename = msg[1]
             rq = bucket.delete(filename)
             sender.simpleMsg(self.sock, addr, "200")
         elif (msg[0] == "insert"):
-            #TODO wait for file to be sent in another message
-            sender.simpleMsg(self.sock, addr, "ready")
+            filename = msg[1]
+            sender.upload_fromName(addr, filename)
         elif (msg[0] == "get"):
-            #TODO get actual file and send
-            filename = msg.split(" ")[1]
-            sender.simpleMsg(self.sock, addr, ("getting %s" %filename ))
-            
+            filename = msg[1]
+            sender.sendFile_fromName(addr, filename)
             #P2P messages
         elif (msg[0] == "P2P"):
             self.ptp.handle(addr, msg)
@@ -76,8 +77,81 @@ class Sender:
         
         sock.sendto((msg +"\n").encode(), addr)
 
-    #TODO sendFile
-    #TODO sendCode
+    def upload_fromName(self, addr, filename):
+        addr = (addr[0], 8081)
+        size = 1024
+        encoding = "utf-8"
+
+
+        client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        client.connect(addr)
+        client.send("READY".encode(encoding))
+
+        """ Receiving the filename and filesize from the client. """
+        data = client.recv(size).decode(encoding)
+        item = data.split("_")
+        if filename != item[0]:
+            print("Something went wrong. Filename not the same")
+        file_size = int(item[1])
+ 
+        print("[+] Filename and filesize received from the client.")
+        client.sendall("Filename and filesize received".encode(encoding))
+
+        with open(f"files/recv_{filename}", "wb") as f:
+            while True:
+                data = client.recv(size)
+    
+                if not data:
+                    break
+    
+                f.write(data)
+                client.sendall("Data received.".encode(encoding))
+
+        client.close()
+
+        #file uploaded to local, now uploading to gcloud
+        bucket = Bucket()
+        bucket.insert("files/recv_"+filename, filename)
+
+        
+
+    def sendFile_fromName(self, addr, filename):
+        encoding = "utf-8"
+        size = 1024
+        fileWDir = "files/"+filename
+        bucket = Bucket()
+        print("Downloading file from bucket")
+
+        bucket.get(filename, fileWDir)
+        file_size = os.path.getsize(fileWDir)
+
+        client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        client.connect((addr[0], 8081))
+
+        """ Sending the filename and filesize to the server. """
+        data = f"{filename}_{file_size}"
+        client.sendall(data.encode(encoding))
+        msg = client.recv(size).decode(encoding)
+        print(f"SERVER: {msg}")
+    
+        """ Data transfer. """
+        print(fileWDir)
+        with open(fileWDir, "rb") as f:
+            print(f.name)
+            print("loop")
+            while True:
+                data = f.read(size)
+                print(data)
+                if not data:
+                    break
+    
+                client.sendall(data)
+                msg = client.recv(size).decode(encoding)
+
+        """ Closing the connection """
+        client.close()
+ 
+
 
 
 class Ptp:
@@ -94,18 +168,20 @@ class Ptp:
     def handle(self, addr, msg):
         if msg[1] == "JOIN":
             print("-- Received JOIN, adding addr : %s" % addr[0])
-            self.nodes.append(addr[0])
             self.sender.simpleMsg(self.sock, addr, "P2P:RJOIN:" + str(len(self.nodes)) + ":" +":".join(str(x) for x in self.nodes))
+            self.nodes.append(addr[0])
         
         if msg[1] == "LIST":
             print("-- Receieved LIST, current nodes are : ".join(str(x) for x in self.nodes))
             self.sender.simpleMsg(self.sock, addr, str(self.nodes))
         
         if msg[1] == "RJOIN":
-            print("-- Received RJOIN, adding nodes received.")
+            print("-- Received RJOIN, adding and sending JOIN to nodes received.")
             for i in range(int(msg[2])):
-                print("Adding node: " + str(msg[i+3]))
-                self.nodes.append(msg[i+3])
+                if msg[i+3] not in self.nodes:
+                    print("Adding node: " + str(msg[i+3]))
+                    self.nodes.append(msg[i+3])
+                    self.sender.simpleMsg(self.sock, (msg[i+3], 8080), "P2P:JOIN")
         else:
             pass
 
@@ -129,8 +205,8 @@ class Bucket:
         return objs
 
     # Upload a new object to the bucket
-    def insert(self, file_path):
-        blob_name = os.path.basename(file_path)
+    def insert(self, file_path, filename):
+        blob_name = filename
         blob = self.bucket.blob(blob_name)
         blob.upload_from_filename(file_path)
         print(f"File {file_path} uploaded to {self.bucket_name} as {blob_name}.")
