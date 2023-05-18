@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <h1>View Content</h1>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Type</th>
+                <th>Name</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in content %}
+                <tr>
+                    <td>{{ item.type }}</td>
+                    <td>
+                        {% if item.type == 'text' %}
+                            {{ item.filename }}
+                        {% elif item.type == 'image' %}
+                            {{ item.filename }}
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.type == 'text' %}
+                            <a href="{{ url_for('download_file', filename=item.filename) }}" class="btn btn-primary">Download</a>
+                        {% elif item.type == 'image' %}
+                            <a href="{{ url_for('download_file', filename=item.filename) }}" class="btn btn-primary">Download</a>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endblock %}

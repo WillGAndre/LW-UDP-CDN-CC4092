@@ -19,3 +19,10 @@ services:
     ports:
       - 11211:11211
     command: ["memcached"]
+
+# sudo docker exec -it lb_nginx-node-1 bash
+  node:
+    build: bs_node
+    depends_on:
+      - app
+    command: ["python3", "node.py"]

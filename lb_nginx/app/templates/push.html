@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <h1>Push Content</h1>
+    {% if success %}
+        <div class="alert alert-success">{{ success }}</div>
+    {% endif %}
+    <form method="POST" action="{{ url_for('push') }}" enctype="multipart/form-data">
+        <div class="form-group">
+            <label for="text_file">Text File</label>
+            <input type="file" class="form-control-file" name="text_file" id="text_file">
+        </div>
+        <div class="form-group">
+            <label for="image_file">Image File</label>
+            <input type="file" class="form-control-file" name="image_file" id="image_file">
+        </div>
+        <button type="submit" class="btn btn-primary">Push</button>
+    </form>
+{% endblock %}
