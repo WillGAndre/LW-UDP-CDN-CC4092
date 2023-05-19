@@ -2,9 +2,10 @@ from googleapiclient.discovery import build
 import google.auth
 import google.auth.transport.requests
 
-GCLOUD_CREDS = "asc23-378811-ca4948da7594.json"
-SERVICE_NAME = ""
-IMAGE_URL    = ""
+GCLOUD_CREDS   = "asc23-378811-ca4948da7594.json"
+SERVICE_NAME   = "internal-ring-node"
+IMAGE_URL      = "gcr.io/ASC23/internal-ring-node"
+SERVICE_REGION = "europe-southwest1"
 
 def load_creds():
     creds, proj  = google.auth.load_credentials_from_file(GCLOUD_CREDS)
@@ -33,5 +34,6 @@ if __name__ == "__main__":
                 },
             },
         },
+        'location': SERVICE_REGION,
     }
     # response = service.namespaces().services().create(parent=f'namespaces/{proj}/services', body=service_request).execute()
