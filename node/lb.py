@@ -50,7 +50,7 @@ def insert():
 
 
 def get():
-
+    own_addr = ("127.0.0.2", 8081)
     node_addr = ("127.0.0.1", 8081)
     ADDR = ("127.0.0.2", 8081)
     size = 1024

@@ -92,8 +92,12 @@ def push():
     return render_template("master.html", content=content, success="Content added successfully")
 
 
+# TODO: list
+
+# TODO: 
 @app.route("/view")
 def view():
+    # session['username']
     return render_template("view.html", content=content)
 
 
