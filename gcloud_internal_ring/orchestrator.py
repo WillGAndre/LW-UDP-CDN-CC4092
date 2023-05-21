@@ -56,19 +56,27 @@ def create_vm(project_id, zone, instance_name, machine_type, disk_image):
     subprocess.run(create_command, check=True)
     time.sleep(15)
 
-def import_code(project_id, zone, instance_name, local_path, remote_path):
+def import_code(project_id, zone, instance_name, local_path, remote_path, recurse=False):
     # Check if the VM already exists
     if not describe_vm(project_id, zone, instance_name):
         print(f"VM '{instance_name}' doesn't exist. Skipping.")
         return
 
     # Construct the gcloud command to copy the code to the VM
-    import_command = [
-        'gcloud', 'compute', 'scp', local_path,
-        f'{instance_name}:/{remote_path}',
-        '--project', project_id,
-        '--zone', zone,
-    ]
+    if not recurse:
+        import_command = [
+            'gcloud', 'compute', 'scp', local_path,
+            f'{instance_name}:/{remote_path}',
+            '--project', project_id,
+            '--zone', zone,
+        ]
+    else:
+        import_command = [
+            'gcloud', 'compute', 'scp', '--recurse', local_path,
+            f'{instance_name}:/{remote_path}',
+            '--project', project_id,
+            '--zone', zone,
+        ]
 
     # Execute the gcloud command to copy the code to the VM
     subprocess.run(import_command, check=True)
@@ -141,23 +149,15 @@ def initiate_lb_vm(project_id, zone, instance_name, remote_path, command):
     # Execute the gcloud command to initiate the VM
     subprocess.run(initiate_command, check=True)
 
-def __init_ring():
-    ring_size = 3
-
+def __init_ring_node(instance_name='internal-2', zone='us-central1-a'):
     project_id = 'asc23-378811'
-    zone = 'us-central1-a'
-    instance_name = 'internal-2'
+    # zone = 'us-central1-a'
+    # instance_name = 'internal-2'
     machine_type = 'n1-standard-1'
     disk_image = 'debian-10'
     local_path = 'node/node.py'
     remote_path = 'tmp'
     command = 'node.py'
-
-    while ring_size:
-        create_vm(project_id, zone, instance_name, machine_type, disk_image)
-        import_code(project_id, zone, instance_name, local_path, remote_path)
-        initiate_node_vm(project_id, zone, instance_name, remote_path, command)
-        ring_size -= 1
 
     # Create the VM
     create_vm(project_id, zone, instance_name, machine_type, disk_image)
@@ -186,7 +186,7 @@ def __init_lb():
     # # Import the code to the VM
     import_code(project_id, zone, instance_name, local_code_path, remote_path)
     import_code(project_id, zone, instance_name, local_data_sample, remote_path)
-    import_code(project_id, zone, instance_name, local_templates, remote_path)
+    import_code(project_id, zone, instance_name, local_templates, remote_path, recurse=True)
 
     # Initiate the VM with the Python code
     initiate_lb_vm(project_id, zone, instance_name, remote_path, command)
@@ -194,4 +194,5 @@ def __init_lb():
 # __init_ring()
 # __init_lb()
 
-print(get_zones())
+# __init_ring_node()
+__init_lb()

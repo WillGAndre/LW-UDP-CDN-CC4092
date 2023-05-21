@@ -3,16 +3,18 @@ import os
 import sys
 import time
 import threading
-from flask import Flask
+from flask import Flask, render_template, request, redirect, url_for, session, send_file
 
 lbZone = sys.argv[1]
 lbRemoteNode = ["10.128.0.4"]
 lbNodePort = 4444
 lbBuckets = []
+lbContent = []
 # lbArrivals = []
 lbUploadsDir = '/tmp/'
 lbArrivalsDir = '/tmp/'
 app = Flask(__name__)
+app.config['UPLOAD_FOLDER'] = lbUploadsDir
 
 def get_ip():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -54,8 +56,53 @@ def receive_udp_message(port):
         print(f"Received '{message}' from {address[0]}:{address[1]}")
 
 @app.route('/')
-def hello():
-    return 'Hello, Flask on GCP!'
+def index():
+    return render_template("index.html")
+
+@app.route("/login", methods=["POST"])
+def login():
+    username = request.form.get("username")
+    password = request.form.get("password")
+    
+    if username == "client" and password == "password":
+        session['username'] = username
+        return render_template("client.html", content=lbContent)
+    elif username == "master" and password == "password":
+        session['username'] = username
+        return render_template("master.html")
+    else:
+        return render_template("index.html", error="Invalid credentials")
+
+@app.route("/view")
+def view():
+    # session['username']
+    return render_template("view.html", content=lbContent)
+
+
+@app.route('/uploads/<filename>')
+def download_file(filename):
+    filename = filename.replace(" ", "_")
+    return send_file(os.path.join(app.config['UPLOAD_FOLDER'], filename), as_attachment=True)
+
+@app.route('/view/<filename>')
+def view_file(filename):
+    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    with open(file_path, 'r') as f:
+        file_contents = f.read()
+    return render_template("view_file.html", filename=filename, file_contents=file_contents)
+
+@app.route('/view_file_content/<string:filename>')
+def view_file_content(filename):
+    filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+    with open(filepath, 'r') as file:
+        content = file.read()
+    return render_template('view_file_content.html', content=content)
+
+
+@app.route("/logout")
+def logout():
+    session.pop('username', None)
+    return redirect(url_for('index'))
 
 @app.route('/stats')
 def stats():
@@ -66,7 +113,7 @@ def insert():
     file_path = f"{lbUploadsDir}text3.txt"
     node = lbRemoteNode[0]
     try:
-        send_udp_message(f"lb:insert:text3.txt", node, lbNodePort)                         # ******
+        send_udp_message(f"lb:insert:text3.txt", node, lbNodePort)                          # ******
         with open(file_path, 'rb') as file:
             file_len = os.path.getsize(file_path)
             proc_len = 1024
@@ -109,57 +156,6 @@ if __name__ == '__main__':
         time.sleep(7)
     app.run(host='0.0.0.0', port=5000)
     receive_thread.join()
-
-def insert():
-    own_addr = (get_ip(), 4445)
-    node_addr = ("10.128.0.4", 4445)
-    size = 1024
-    encoding = "utf-8"
-    filename = "text3.txt"
-    fileWDir = filename
-
-
-    """ Creating a TCP socket """
-    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    server.bind(own_addr)
-    server.listen()
-    print("[+] Listening...")
- 
-    udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    udp.bind((own_addr[0], lbNodePort))
-    udp.sendto(("lb:insert\n").encode(), (node_addr[0], lbNodePort))
-
-    
-    """ Accepting the connection from the client. """
-    conn, addr = server.accept()
-    print(f"[+] Client connected from {addr[0]}:{addr[1]}")
-    conn.recv(size).decode(encoding)
-
-    """ Sending the filename and filesize to the server. """
-    file_size = os.path.getsize(fileWDir)
-    data = f"{filename}_{file_size}"
-    conn.sendall(data.encode(encoding))
-    msg = conn.recv(size).decode(encoding)
-    print(f"SERVER: {msg}")
-    
-    """ Data transfer. """
-    with open(fileWDir, "rb") as f:
-        while True:
-            data = f.read(size)
-            if not data:
-                break
-    
-            conn.sendall(data)
-            msg = conn.recv(size).decode(encoding)
-
-    """ Closing the connection """
-    conn.close()
-
-def debug():
-    while True:
-        time.sleep(5)
-        input()
 
 # if __name__ == "__main__":
 #     insert_thread = threading.Thread(target=insert)
