@@ -134,7 +134,7 @@ def view_file(filename):
     except Exception as e:
         pass
     time.sleep(5)
-    return render_template("view_file.html", filename=filename, file_contents=file_contents)
+    return render_template("view.html", filename=filename, file_contents=file_contents)
 
 @app.route('/view_file_content/<string:filename>')
 def view_file_content(filename):

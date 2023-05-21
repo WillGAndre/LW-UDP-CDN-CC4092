@@ -111,9 +111,9 @@ def receive_udp_message(port):
             filename = msplit[1]
             chunk = msplit[2]
             if filename in nodeFiles:
-                nodeFiles[filename] += chunk
+                nodeFiles[filename] += chunk.encode()
             else:
-                nodeFiles[filename] = chunk
+                nodeFiles[filename] = chunk.encode()
         elif "lbfc" in message:
             if address[0] not in external_nodes:
                 external_nodes.append(address[0])
@@ -122,9 +122,9 @@ def receive_udp_message(port):
             filename = msplit[1]
             chunk = msplit[2]
             if filename in nodeFiles:
-                nodeFiles[filename] += chunk
+                nodeFiles[filename] += chunk.encode()
             else:
-                nodeFiles[filename] = chunk
+                nodeFiles[filename] = chunk.encode()
 
             bucket = storage_client.bucket(bucket_name)
             blob = bucket.blob(filename)
