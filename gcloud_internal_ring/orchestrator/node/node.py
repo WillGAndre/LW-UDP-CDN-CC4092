@@ -25,7 +25,7 @@ credentials = """
   "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/csa-internal-ring&#37;40asc23-378811.iam.gserviceaccount.com",
   "universe_domain": "googleapis.com"
 }
-"""
+""" # Env Var
 
 # Create a temporary credentials file
 credentials_file = "credentials.json"
@@ -78,16 +78,14 @@ def receive_udp_message(port):
         elif "BINSERT:" in message:
             msg_split = message.split(':')
             file = msg_split[1]
-            data_size = msg_split[2]
-            data = msg_split[3]
             json_object = [
                 {
-                    "data-size": data_size,
-                    "data": data
+                    "filename": file,
+                    "maintainer": address[0]
                 }
             ]
-            push_json_objects(bucket_name, json_object, file)
-            retrieved_json_objects = get_json_objects(bucket_name, remote_file)
+            push_json_objects(bucket_name, json_object, f"ref-{file}")
+            retrieved_json_objects = get_json_objects(bucket_name, f"ref-{file}")
             print(f"Created {file} with {retrieved_json_objects}")
         elif "lb:getbucket" in message:
             if address[0] not in external_nodes:
@@ -96,13 +94,15 @@ def receive_udp_message(port):
             location = message.split(':')[2]
             for nodeaddr in nodes:
                 send_udp_message(f"BQUERY:{address[0]}:{location}", nodeaddr, nodePort)
-        elif message == "lb:insert": # lb:insert:<filename>
+        elif "lb:insert" in message: # lb:insert:<filename>
             if address[0] not in external_nodes:
                 external_nodes.append(address[0])
             msplit = message.split(':')
 
             filename = msplit[2]
             nodeFiles[filename] = b''
+            for nodeaddr in nodes:
+                send_udp_message(f"BINSERT:{filename}", nodeaddr, nodePort)
         elif "lbc" in message:
             if address[0] not in external_nodes:
                 external_nodes.append(address[0])

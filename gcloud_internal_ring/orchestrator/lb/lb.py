@@ -9,7 +9,7 @@ lbZone = sys.argv[1]
 lbRemoteNode = ["10.128.0.4"]
 lbNodePort = 4444
 lbBuckets = []
-lbArrivals = []
+# lbArrivals = []
 lbUploadsDir = '/tmp/'
 lbArrivalsDir = '/tmp/'
 app = Flask(__name__)
@@ -41,7 +41,8 @@ def receive_udp_message(port):
             # lbRemoteNode.append(address[0])
             lbRemoteNode.insert(0, address[0])
         elif "bucket" in message:
-            lbBuckets.append(message.split(';')[0].split(':')[1])
+            lbBuckets.insert(0, message.split(';')[0].split(':')[1])
+            lbRemoteNode.insert(0, message.split(';')[1].split(':')[1])
         elif "res-insert" in message:
             msplit = message.split(':')
             filename = msplit[1]
@@ -72,7 +73,7 @@ def insert():
             chunk = file.read(1024)
             while chunk:
                 if proc_len >= file_len:
-                    send_udp_message(f"lbfc:text3.txt:{chunk}", node, lbNodePort)
+                    send_udp_message(f"lbfc:text3.txt:{chunk}", node, lbNodePort)           # UDP limitation
                 else:
                     send_udp_message(f"lbc:text3.txt:{chunk}", node, lbNodePort)
                 chunk = file.read(1024)
@@ -90,15 +91,12 @@ def insert():
 
         if file_contents == None:
             # send_udp_message(f"lb:insert:text3.txt:", lbRemoteNode[0], lbNodePort)
-            print(f"waiting for arrival... | Does the file exist: {os.path.exists(f'{lbArrivalsDir}arr-text3.txt')}")
+            print(f"waiting for arrival... | Arrival check: {os.path.exists(f'{lbArrivalsDir}arr-text3.txt')}")
             input()
 
     return f"""
-        Pushed {file_path} to remote bucket\n
-        
-        Lorem ipsum dolor sit amet\n
-
-        Arrival: \nFile contents >> {file_contents}
+        Pushed {file_path} to remote bucket \n\n\n\n
+        {file_contents}
     """
 
 if __name__ == '__main__':

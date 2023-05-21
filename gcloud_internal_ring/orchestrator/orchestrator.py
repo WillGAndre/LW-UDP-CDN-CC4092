@@ -4,9 +4,10 @@
 
 import json
 import time
+import random
 import subprocess
 
-def get_regions() -> list:
+def get_zones() -> list:
     regions_command = [
         "gcloud", "compute", "zones", "list", "--format=json"
     ]
@@ -141,6 +142,8 @@ def initiate_lb_vm(project_id, zone, instance_name, remote_path, command):
     subprocess.run(initiate_command, check=True)
 
 def __init_ring():
+    ring_size = 3
+
     project_id = 'asc23-378811'
     zone = 'us-central1-a'
     instance_name = 'internal-2'
@@ -149,6 +152,12 @@ def __init_ring():
     local_path = 'node/node.py'
     remote_path = 'tmp'
     command = 'node.py'
+
+    while ring_size:
+        create_vm(project_id, zone, instance_name, machine_type, disk_image)
+        import_code(project_id, zone, instance_name, local_path, remote_path)
+        initiate_node_vm(project_id, zone, instance_name, remote_path, command)
+        ring_size -= 1
 
     # Create the VM
     create_vm(project_id, zone, instance_name, machine_type, disk_image)
@@ -167,6 +176,7 @@ def __init_lb():
     disk_image = 'debian-10'
     local_code_path = 'lb/lb.py'
     local_data_sample = 'lb/text3.txt'
+    local_templates = 'lb/templates'
     remote_path = 'tmp'
     command = 'lb.py'
 
@@ -176,9 +186,12 @@ def __init_lb():
     # # Import the code to the VM
     import_code(project_id, zone, instance_name, local_code_path, remote_path)
     import_code(project_id, zone, instance_name, local_data_sample, remote_path)
+    import_code(project_id, zone, instance_name, local_templates, remote_path)
 
     # Initiate the VM with the Python code
     initiate_lb_vm(project_id, zone, instance_name, remote_path, command)
 
 # __init_ring()
-__init_lb()
+# __init_lb()
+
+print(get_zones())

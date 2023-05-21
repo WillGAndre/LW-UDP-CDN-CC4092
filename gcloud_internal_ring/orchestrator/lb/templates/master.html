@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <h2>Welcome Master</h2>
+
+  {% if success %}
+    <div class="alert alert-success" role="alert">
+      {{ success }}
+    </div>
+  {% endif %}
+
+  <form action="{{ url_for('push') }}" method="post" enctype="multipart/form-data">
+    <div class="form-group">
+      <label for="text_file">Text File:</label>
+      <input type="file" class="form-control-file" id="text_file" name="text_file">
+    </div>
+    <div class="form-group">
+      <label for="image_file">Image File:</label>
+      <input type="file" class="form-control-file" id="image_file" name="image_file">
+    </div>
+    <button type="submit" class="btn btn-primary">Push</button>
+  </form>
+
+  <hr>
+
+  <h3>Content:</h3>
+  {% if content %}
+    <ul>
+    {% for item in content %}
+      {% if item['type'] == 'text' %}
+        <li><a href="{{ url_for('view', filename=item['filename']) }}">{{ item['filename'] }}</a></li>
+      {% elif item['type'] == 'image' %}
+        <li><a href="{{ url_for('view', filename=item['filename']) }}"><img src="{{ url_for('view', filename=item['filename']) }}" alt="{{ item['filename'] }}" style="max-width: 200px;"></a></li>
+      {% endif %}
+    {% endfor %}
+    </ul>
+  {% else %}
+    <p>No content available.</p>
+  {% endif %}
+  <a href="/logout">Logout</a>
+{% endblock %}
