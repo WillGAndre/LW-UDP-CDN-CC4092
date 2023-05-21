@@ -5,6 +5,7 @@ import time
 import threading
 import secrets
 from flask import Flask, render_template, request, redirect, url_for, session, send_file
+from werkzeug.utils import secure_filename
 
 lbZone = sys.argv[1]
 lbRemoteNode = ["10.128.0.4"]
@@ -75,6 +76,28 @@ def login():
         return render_template("master.html")
     else:
         return render_template("index.html", error="Invalid credentials")
+
+@app.route("/push", methods=["POST"])
+def push():
+    # Example push logic for Master user
+    new_content = {}
+    new_text = request.form.get("text")
+    new_text_file = request.files.get("text_file")
+    new_image_file = request.files.get("image_file")
+
+    if new_text_file:
+        new_content["type"] = "text"
+        new_content["filename"] = new_text_file.filename
+        new_text_file.save(os.path.join(app.config["UPLOAD_FOLDER"], secure_filename(new_text_file.filename)))
+    if new_image_file:
+        filename = secure_filename(new_image_file.filename)
+        new_image_file.save(os.path.join(app.config["UPLOAD_FOLDER"], filename))
+        new_content["type"] = "image"
+        new_content["filename"] = filename
+
+    lbContent.append(new_content)
+
+    return render_template("master.html", content=lbContent, success="Content added successfully")
 
 @app.route("/view")
 def view():
