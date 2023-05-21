@@ -115,6 +115,25 @@ def view_file(filename):
     file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     with open(file_path, 'r') as f:
         file_contents = f.read()
+
+    node = lbRemoteNode[0]
+    try:
+        send_udp_message(f"lb:insert{filename}", node, lbNodePort)
+        with open(file_path, 'rb') as file:
+            file_len = os.path.getsize(file_path)
+            proc_len = 1024
+            chunk = file.read(1024)
+            while chunk:
+                if proc_len >= file_len:
+                    send_udp_message(f"lbfc:{filename}:{chunk}", node, lbNodePort)           # UDP limitation
+                else:
+                    send_udp_message(f"lbc:{filename}:{chunk}", node, lbNodePort)
+                chunk = file.read(1024)
+                proc_len += 1024
+        print(f'File "{file_path}" sent successfully')
+    except Exception as e:
+        pass
+    time.sleep(5)
     return render_template("view_file.html", filename=filename, file_contents=file_contents)
 
 @app.route('/view_file_content/<string:filename>')
@@ -132,7 +151,7 @@ def logout():
 
 @app.route('/stats')
 def stats():
-    return f"LB Zone: {lbZone} \nRemote Nodes: {lbRemoteNode} \nBucket Refs: {lbBuckets}"
+    return f"LB Zone: {lbZone} \nRemote Nodes: {lbRemoteNode} \nBucket Refs: {lbBuckets} \nArrivals: {os.listdir(lbArrivalsDir)}"
 
 @app.route('/insert')
 def insert():
