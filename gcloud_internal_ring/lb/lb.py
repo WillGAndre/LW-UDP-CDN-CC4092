@@ -3,6 +3,7 @@ import os
 import sys
 import time
 import threading
+import secrets
 from flask import Flask, render_template, request, redirect, url_for, session, send_file
 
 lbZone = sys.argv[1]
@@ -14,6 +15,8 @@ lbContent = []
 lbUploadsDir = '/tmp/'
 lbArrivalsDir = '/tmp/'
 app = Flask(__name__)
+secret_key = secrets.token_hex(32)
+app.secret_key = secret_key
 app.config['UPLOAD_FOLDER'] = lbUploadsDir
 
 def get_ip():
