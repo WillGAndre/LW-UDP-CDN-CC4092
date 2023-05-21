@@ -140,7 +140,7 @@ def initiate_lb_vm(project_id, zone, instance_name, remote_path, command):
             sudo apt update
             sudo apt install nginx
             sudo apt-get install python3-pip
-            pip3 install -u Werkzeug
+            pip3 install -U Werkzeug
             pip3 install google-cloud-storage google-auth google-auth-httplib2 google-auth-oauthlib flask
             python3 /{remote_path}/{command} {zone}
         """        

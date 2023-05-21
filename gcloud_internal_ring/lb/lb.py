@@ -118,7 +118,7 @@ def view_file(filename):
 
     node = lbRemoteNode[0]
     try:
-        send_udp_message(f"lb:insert{filename}", node, lbNodePort)
+        send_udp_message(f"lb:insert:{filename}", node, lbNodePort)
         with open(file_path, 'rb') as file:
             file_len = os.path.getsize(file_path)
             proc_len = 1024
