@@ -2,23 +2,23 @@ import socket
 import os
 
 def insert():
-    own_addr = ("127.0.0.2", 8081)
-    node_addr = ("127.0.0.1", 8081)
+    own_addr = ("192.168.1.137", 4445)
+    node_addr = ("10.128.0.4", 4445)
     size = 1024
     encoding = "utf-8"
     filename = "text3.txt"
     fileWDir = "files/"+filename
 
 
-    """ Creating a TCP server socket """
+    """ Creating a TCP socket """
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind(own_addr)
     server.listen()
     print("[+] Listening...")
  
     udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    udp.bind((own_addr[0], 8080))
-    udp.sendto(("insert:"+filename +"\n").encode(), (node_addr[0], 8080))
+    udp.bind((own_addr[0], 4444))
+    udp.sendto(("insert:"+filename +"\n").encode(), (node_addr[0], 4444))
 
     
     """ Accepting the connection from the client. """
