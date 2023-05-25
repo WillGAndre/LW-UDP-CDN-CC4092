@@ -12,7 +12,7 @@ lbRemoteNode = ["10.128.0.4"]
 lbNodePort = 4444
 lbBuckets = []
 lbContent = []
-# lbArrivals = []
+lbArrivals = []
 lbUploadsDir = '/tmp/'
 lbArrivalsDir = '/tmp/'
 app = Flask(__name__)
@@ -47,8 +47,14 @@ def receive_udp_message(port):
             # lbRemoteNode.append(address[0])
             lbRemoteNode.insert(0, address[0])
         elif "bucket" in message:
-            lbBuckets.insert(0, message.split(';')[0].split(':')[1])
-            lbRemoteNode.insert(0, message.split(';')[1].split(':')[1])
+            bref = message.split(';')[0].split(':')[1]
+            nref = message.split(';')[1].split(':')[1]
+            if bref not in lbBuckets:
+                lbBuckets.insert(0, bref)
+            if nref not in lbRemoteNode:
+                lbRemoteNode.insert(0, nref)
+        elif "list" in message:
+            lbArrivals.append(message.split(':')[1])
         elif "res-insert" in message:
             msplit = message.split(':')
             filename = msplit[1]
@@ -102,7 +108,7 @@ def push():
 @app.route("/view")
 def view():
     # session['username']
-    return render_template("view.html", content=lbContent)
+    return render_template("view.html", content=lbContent, filenames=["test"])
 
 
 @app.route('/uploads/<filename>')
@@ -143,6 +149,15 @@ def view_file_content(filename):
         content = file.read()
     return render_template('view_file_content.html', content=content)
 
+@app.route("/getbucket")
+def getbucket():
+    send_udp_message(f"lb:getbucket:{lbZone}", lbRemoteNode[0], lbNodePort)
+    return f"Buckets:{lbBuckets}\tNodes:{lbRemoteNode}"
+
+@app.route("/list")
+def list():
+    send_udp_message("lb:list", lbRemoteNode[0], lbNodePort)
+    return f"Arrivals:{lbArrivals}"
 
 @app.route("/logout")
 def logout():

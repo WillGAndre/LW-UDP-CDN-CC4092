@@ -62,18 +62,18 @@ def receive_udp_message(port):
             if address[0] not in nodes:
                 nodes.append(address[0])
                 for nodeaddr in nodes:
-                    if nodeaddr != address[0]:
-                        send_udp_message(f"ADD:{address[0]}", nodeaddr, nodePort)
+                    send_udp_message(f"ADD:{address[0]}", nodeaddr, nodePort)
                 send_udp_message("JOIN", address[0], nodePort)
         elif "ADD:" in message:
             nodeaddr = message.split(':')[1]
-            nodes.append(nodeaddr)
+            if nodeaddr not in nodes:
+                nodes.append(nodeaddr)
             send_udp_message("JOIN", nodeaddr, nodePort)
         elif "BQUERY:" in message:
             msg_split = message.split(':')
             target = msg_split[1]
-            location = msg_split[2] # Location Type: Region
-            if location == nodeLocation:
+            location = msg_split[2] # Location Type: Zone
+            if location == nodeZone:
                 send_udp_message(f"bucket:{bucket_name};node:{nodeHost}", target, nodePort)
         elif "BINSERT:" in message:
             msg_split = message.split(':')
@@ -87,6 +87,16 @@ def receive_udp_message(port):
             push_json_objects(bucket_name, json_object, f"ref-{file}")
             retrieved_json_objects = get_json_objects(bucket_name, f"ref-{file}")
             print(f"Created {file} with {retrieved_json_objects}")
+        elif "lb:list" in message:
+            if address[0] not in external_nodes:
+                external_nodes.append(address[0])
+            print(f"Objects in bucket {bucket_name}:")
+            bucket = storage_client.bucket(bucket_name)
+            objs = []
+            for blob in bucket.list_blobs():
+                print(f" - {blob.name}")
+                objs.append(blob.name)
+            send_udp_message(f"list:{objs}", address[0], nodePort)
         elif "lb:getbucket" in message:
             if address[0] not in external_nodes:
                 external_nodes.append(address[0])
@@ -140,8 +150,8 @@ def receive_udp_message(port):
 
 def debug():
     while True:
-        print(f"Nodes: {nodes}")
-        cmd = input()
+        print(f"Nodes: {nodes} External Nodes: {external_nodes} Buckets: {buckets} Node Files: {nodeFiles}")
+        input()
         # command = input("Enter a command to send: ")
         # send_udp_message(command, get_ip(), 4444)
 
@@ -186,7 +196,7 @@ if __name__ == "__main__":
     nodePort = 4444
     nodeID = uuid.uuid4()
     nodeZone = sys.argv[1]
-    # nodeType = sys.argv[2]  # 0 --> orchestrator | 1 --> internal | 2 --> external
+    nodeType = sys.argv[2]  # 0 --> orchestrator | 1 --> internal | 2 --> external
     nodeHost = f"{get_ip()}:{nodePort}"
     nodeCertFile = "node.crt"
     nodeKeyFile = "node.key"
@@ -217,6 +227,11 @@ if __name__ == "__main__":
     else:
         print(f"Bucket '{bucket_name}' already exists.")
     buckets.append((bucket_name, nodeZone))
+
+    if nodeType != "0":
+        send_udp_message("JOIN", "10.128.0.4", 4444)
+
+    print("SET 1/1")
 
     receive_thread = threading.Thread(target=receive_udp_message, args=(nodePort,))
     receive_thread.start()

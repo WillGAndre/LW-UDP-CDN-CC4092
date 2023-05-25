@@ -5,6 +5,7 @@
 import json
 import time
 import random
+import threading
 import subprocess
 
 def get_zones() -> list:
@@ -95,9 +96,8 @@ def initiate_node_vm(project_id, zone, instance_name, remote_path, command, node
         '--command', f"""
             sudo apt-get install python3-pip
             pip3 install google-cloud-storage google-auth google-auth-httplib2 google-auth-oauthlib
-            python3 /{remote_path}/{command} {zone}
-        """        
-        # f'python3 /{remote_path}/{command}',
+            python3 /{remote_path}/{command} {zone} {node_type}
+        """  
     ]
 
     # Execute the gcloud command to initiate the VM
@@ -150,7 +150,7 @@ def initiate_lb_vm(project_id, zone, instance_name, remote_path, command):
     # Execute the gcloud command to initiate the VM
     subprocess.run(initiate_command, check=True)
 
-def __init_ring_node(instance_name='internal-2', zone='us-central1-a'):
+def __init_ring_node(instance_name='internal-2', zone='us-central1-a', node_type=0):
     project_id = 'asc23-378811'
     # zone = 'us-central1-a'
     # instance_name = 'internal-2'
@@ -167,12 +167,12 @@ def __init_ring_node(instance_name='internal-2', zone='us-central1-a'):
     import_code(project_id, zone, instance_name, local_path, remote_path)
 
     # Initiate the VM with the Python code
-    initiate_node_vm(project_id, zone, instance_name, remote_path, command)
+    initiate_node_vm(project_id, zone, instance_name, remote_path, command, node_type)
 
-def __init_lb():
+def __init_lb(instance_name='lb-1', zone = 'us-central1-a'):
     project_id = 'asc23-378811'
-    zone = 'us-central1-a'
-    instance_name = 'lb-1'
+    # zone = 'us-central1-a'
+    # instance_name = 'lb-1'
     machine_type = 'n1-standard-1'
     disk_image = 'debian-10'
     local_code_path = 'lb/lb.py'
@@ -192,8 +192,36 @@ def __init_lb():
     # Initiate the VM with the Python code
     initiate_lb_vm(project_id, zone, instance_name, remote_path, command)
 
+def __init_ring():
+    __init_ring_node()
+    __init_ring_node('internal-1', 'europe-west1-c', 1)
+    __init_ring_node('internal-3', 'us-west3-b', 1) 
+
+def __init_lbs():
+    lb_thread1 = threading.Thread(target=__init_lb)
+    lb_thread1.start()
+    lb_thread2 = threading.Thread(target=__init_lb, args=('lb-2', random.choice(get_zones()), ))
+    lb_thread2.start()
+    lb_thread1.join()
+    lb_thread2.join()
+
+## Create Internal Ring
+# ir_thread = threading.Thread(target=__init_ring)
+# ir_thread.start()
 # __init_ring()
+# __init_ring_node('internal-1', 'europe-west1-c', 1)
+# __init_ring_node('internal-3', 'us-west3-b', 1) 
+# __init_ring_node()
+
+## Create Load Balancers (Client app)
+# __init_lb(zone='europe-west1-c')
+# __init_lbs()
+# ir_thread.join()
 # __init_lb()
 
+# ---
+
 # __init_ring_node()
-__init_lb()
+# __init_ring_node('internal-1', 'europe-west1-c', 1)
+# __init_lb(zone='europe-west1-c')
+__init_lb(instance_name='lb-2', zone='europe-west1-c')
