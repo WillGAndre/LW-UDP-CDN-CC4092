@@ -1,289 +1,232 @@
-import requests
-import sys
-import socket
 import os
-import threading
-from google.cloud import storage
+import sys
+import ssl
+import json
 import uuid
-import logging
+import time
+import socket
+import threading
+import subprocess
 
+from google.cloud import storage
+from google.oauth2 import service_account
 
+credentials = """
+""" # Set JSON gcloud creds | Env Var
 
-class Listener:
-    def __init__(self, node):
-        self.node = node
-        self.sock = node.sock
-        self.ptp = Ptp(self.sock)
+# Create a temporary credentials file
+credentials_file = "credentials.json"
+with open(credentials_file, "w") as f:
+    f.write(credentials)
 
-        threading.Thread(target=self.listen).start()
+# Authenticate with Google Cloud using the temporary credentials file
+credentials = service_account.Credentials.from_service_account_file(credentials_file)
+storage_client = storage.Client(credentials=credentials)
 
-    
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = credentials_file
 
-    def get_ip(self):
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
-        return s.getsockname()[0]
+DEFAULT_ORCHESTRATOR_NODE = ("10.128.0.4", 4444)
 
-    # Server listening loop
-    def listen(self):
-        print("Node listening on port %s" %self.node.PORT)
-        
-        while True:
-            data, addr = self.sock.recvfrom(1024)
-            thread = threading.Thread(target=self.handler, args=(data, addr))
-            thread.start()
+def get_ip():
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.connect(("8.8.8.8", 80))
+    return s.getsockname()[0]
 
-    # Handle data recieved
-    def handler(self, data, addr):
-        print("recieved : %s from %s" % (data , addr))
+def send_udp_message(message, host, port):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.sendto(message.encode(), (host, port))
+    print(f"Sent UDP message: {message}")
 
-        # Create bucket control to handle commands
-        bucket = Bucket()
+def receive_udp_message(port):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.bind(("0.0.0.0", port))
+    print(f"Listening for UDP messages on port {port}")
 
-        # Sender used to send messages and files.
-        sender = Sender()
-        msg = data.rstrip().decode('ASCII')
-        msg = msg.split(":")
-        #POSSIBLE COMMANDS
-        # list insert, get, delete
-        # sends success/error message with data
-        #TODO return error messages
+    while True:
+        data, address = sock.recvfrom(1024)
+        message = data.decode()
 
-            # LOADBALANCER messages
-        if (msg[0] == "list"):
-            rq = bucket.list()
-            sender.simpleMsg(self.sock, addr, ("200: %s" % rq))
+        if message == "JOIN":
+            if address[0] not in nodes:
+                nodes.append(address[0])
+                for nodeaddr in nodes:
+                    send_udp_message(f"ADD:{address[0]}", nodeaddr, nodePort)
+                send_udp_message("JOIN", address[0], nodePort)
+        elif "ADD:" in message:
+            nodeaddr = message.split(':')[1]
+            if nodeaddr not in nodes:
+                nodes.append(nodeaddr)
+            send_udp_message("JOIN", nodeaddr, nodePort)
+        elif "BQUERY:" in message:
+            msg_split = message.split(':')
+            target = msg_split[1]
+            location = msg_split[2] # Location Type: Zone
+            if location == nodeZone:
+                send_udp_message(f"bucket:{bucket_name};node:{nodeHost}", target, nodePort)
+        elif "BINSERT:" in message:
+            msg_split = message.split(':')
+            file = msg_split[1]
+            json_object = [
+                {
+                    "filename": file,
+                    "maintainer": address[0]
+                }
+            ]
+            push_json_objects(bucket_name, json_object, f"ref-{file}")
+            retrieved_json_objects = get_json_objects(bucket_name, f"ref-{file}")
+            print(f"Created {file} with {retrieved_json_objects}")
+        elif "lb:list" in message:
+            if address[0] not in external_nodes:
+                external_nodes.append(address[0])
+            print(f"Objects in bucket {bucket_name}:")
+            bucket = storage_client.bucket(bucket_name)
+            objs = []
+            for blob in bucket.list_blobs():
+                print(f" - {blob.name}")
+                objs.append(blob.name)
+            send_udp_message(f"list:{objs}", address[0], nodePort)
+        elif "lb:getbucket" in message:
+            if address[0] not in external_nodes:
+                external_nodes.append(address[0])
+            send_udp_message(f"bucket:{bucket_name};node:{nodeHost}", address[0], nodePort)
+            location = message.split(':')[2]
+            for nodeaddr in nodes:
+                send_udp_message(f"BQUERY:{address[0]}:{location}", nodeaddr, nodePort)
+        elif "lb:insert" in message: # lb:insert:<filename>
+            if address[0] not in external_nodes:
+                external_nodes.append(address[0])
+            msplit = message.split(':')
 
-        elif (msg[0] == "delete"):
-            #TODO check if filename is actually there
-            filename = msg[1]
-            rq = bucket.delete(filename)
-            sender.simpleMsg(self.sock, addr, "200")
-        elif (msg[0] == "insert"):
-            filename = msg[1]
-            sender.upload_fromName(addr, filename)
-        elif (msg[0] == "get"):
-            filename = msg[1]
-            sender.sendFile_fromName(addr, filename)
-            #P2P messages
-        elif (msg[0] == "P2P"):
-            self.ptp.handle(addr, msg)
+            filename = msplit[2]
+            nodeFiles[filename] = b''
+            for nodeaddr in nodes:
+                send_udp_message(f"BINSERT:{filename}", nodeaddr, nodePort)
+        elif "lbc" in message:
+            if address[0] not in external_nodes:
+                external_nodes.append(address[0])
+            msplit = message.split(':')
 
+            filename = msplit[1]
+            chunk = msplit[2]
+            if filename in nodeFiles:
+                nodeFiles[filename] += chunk.encode()
+            else:
+                nodeFiles[filename] = chunk.encode()
+        elif "lbfc" in message:
+            if address[0] not in external_nodes:
+                external_nodes.append(address[0])
+            msplit = message.split(':')
 
-    
-class Sender:
-    def simpleMsg(self, sock, addr, msg):
-        print("sending : " + str(msg) +" to " + addr[0] +":" + str(addr[1]))
-        
-        sock.sendto((msg +"\n").encode(), addr)
+            filename = msplit[1]
+            chunk = msplit[2]
+            if filename in nodeFiles:
+                nodeFiles[filename] += chunk.encode()
+            else:
+                nodeFiles[filename] = chunk.encode()
 
-    def upload_fromName(self, addr, filename):
-        addr = (addr[0], 8081)
-        size = 1024
-        encoding = "utf-8"
+            bucket = storage_client.bucket(bucket_name)
+            blob = bucket.blob(filename)
+            blob.upload_from_string(nodeFiles[filename])
 
+            res_file_data = get_file_objects(bucket_name, filename)
+            print(f"Added {filename} to bucket: {res_file_data}")
+            for nodeaddr in nodes:
+                send_udp_message(f"res-insert:{filename}", nodeaddr, nodePort)
+            send_udp_message(f"res-insert:{filename}", address[0], nodePort)
 
-        client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        client.connect(addr)
-        client.send("READY".encode(encoding))
+        print(f"Received '{message}' from {address[0]}:{address[1]} \n Nodes={nodes} Buckets={buckets}")
 
-        """ Receiving the filename and filesize from the client. """
-        data = client.recv(size).decode(encoding)
-        item = data.split("_")
-        if filename != item[0]:
-            print("Something went wrong. Filename not the same")
-        file_size = int(item[1])
- 
-        print("[+] Filename and filesize received from the client.")
-        client.sendall("Filename and filesize received".encode(encoding))
+def debug():
+    while True:
+        print(f"Nodes: {nodes} External Nodes: {external_nodes} Buckets: {buckets} Node Files: {nodeFiles}")
+        input()
+        # command = input("Enter a command to send: ")
+        # send_udp_message(command, get_ip(), 4444)
 
-        with open(f"files/recv_{filename}", "wb") as f:
-            while True:
-                data = client.recv(size)
-    
-                if not data:
-                    break
-    
-                f.write(data)
-                client.sendall("Data received.".encode(encoding))
+def check_bucket(bucket_name) -> bool:
+    return storage_client.bucket(bucket_name).exists()
 
-        client.close()
+def create_bucket(bucket_name, location):
+    # Create the bucket using the Storage client
+    bucket = storage_client.create_bucket(bucket_name, location=location)
+    print(f"Bucket '{bucket_name}' created successfully.")
 
-        #file uploaded to local, now uploading to gcloud
-        bucket = Bucket()
-        bucket.insert("files/recv_"+filename, filename)
+def push_json_objects(bucket_name, json_objects, remote_file):
+    # Serialize the list of JSON objects
+    json_data = json.dumps(json_objects)
 
-        
+    # Push JSON objects to the bucket
+    bucket = storage_client.bucket(bucket_name)
+    blob = bucket.blob(remote_file)
+    blob.upload_from_string(json_data, content_type="application/json")
+    print(f"JSON objects pushed to '{remote_file}' successfully.")
 
-    def sendFile_fromName(self, addr, filename):
-        encoding = "utf-8"
-        size = 1024
-        fileWDir = "files/"+filename
-        bucket = Bucket()
-        print("Downloading file from bucket")
+def get_json_objects(bucket_name, remote_file):
+    # Get JSON objects from the bucket
+    bucket = storage_client.bucket(bucket_name)
+    blob = bucket.blob(remote_file)
+    json_data = blob.download_as_text()
 
-        bucket.get(filename, fileWDir)
-        file_size = os.path.getsize(fileWDir)
+    # Deserialize the JSON objects
+    json_objects = json.loads(json_data)
+    return json_objects
 
-        client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        client.connect((addr[0], 8081))
+def get_file_objects(bucket_name, remote_file):
+    # Get file objects from the bucket
+    bucket = storage_client.bucket(bucket_name)
+    blob = bucket.blob(remote_file)
+    file_data = blob.download_as_text()
 
-        """ Sending the filename and filesize to the server. """
-        data = f"{filename}_{file_size}"
-        client.sendall(data.encode(encoding))
-        msg = client.recv(size).decode(encoding)
-        print(f"SERVER: {msg}")
-    
-        """ Data transfer. """
-        print(fileWDir)
-        with open(fileWDir, "rb") as f:
-            print(f.name)
-            print("loop")
-            while True:
-                data = f.read(size)
-                print(data)
-                if not data:
-                    break
-    
-                client.sendall(data)
-                msg = client.recv(size).decode(encoding)
-
-        """ Closing the connection """
-        client.close()
- 
-
-
-
-class Ptp:
-    def __init__(self, socket):
-        self.nodes = []
-        self.sock = socket
-        self.sender = Sender()
-
-    #send PING to network
-    def ping(self):
-        for node in nodes:
-            sender.simpleMsg(self.sock, node, "PING")    
-
-    def handle(self, addr, msg):
-        if msg[1] == "JOIN":
-            print("-- Received JOIN, adding addr : %s" % addr[0])
-            self.sender.simpleMsg(self.sock, addr, "P2P:RJOIN:" + str(len(self.nodes)) + ":" +":".join(str(x) for x in self.nodes))
-            self.nodes.append(addr[0])
-        
-        if msg[1] == "LIST":
-            print("-- Receieved LIST, current nodes are : ".join(str(x) for x in self.nodes))
-            self.sender.simpleMsg(self.sock, addr, str(self.nodes))
-        
-        if msg[1] == "RJOIN":
-            print("-- Received RJOIN, adding and sending JOIN to nodes received.")
-            for i in range(int(msg[2])):
-                if msg[i+3] not in self.nodes:
-                    print("Adding node: " + str(msg[i+3]))
-                    self.nodes.append(msg[i+3])
-                    self.sender.simpleMsg(self.sock, (msg[i+3], 8080), "P2P:JOIN")
-        else:
-            pass
-
-class Bucket:
-    def __init__(self):
-        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "accountCreds.json"
-
-        self.project_id = "asc23-378811"
-        self.bucket_name = "bucketasc"
-        
-        storage_client = storage.Client()
-        self.bucket = storage_client.get_bucket(self.bucket_name)
-
-    # List all objects in the bucket
-    def list(self):
-        print(f"Objects in bucket {self.bucket_name}:")
-        objs = []
-        for blob in self.bucket.list_blobs():
-            print(f" - {blob.name}")
-            objs.append(blob.name)
-        return objs
-
-    # Upload a new object to the bucket
-    def insert(self, file_path, filename):
-        blob_name = filename
-        blob = self.bucket.blob(blob_name)
-        blob.upload_from_filename(file_path)
-        print(f"File {file_path} uploaded to {self.bucket_name} as {blob_name}.")
-
-    # Download an object from the bucket
-    def get(self, blob_name, destination_path):
-        blob = self.bucket.blob(blob_name)
-        blob.download_to_filename(destination_path)
-        print(f"File {blob_name} downloaded from {self.bucket_name} to {destination_path}.")
-
-    # Delete an object from the bucket
-    def delete(self, blob_name):
-        blob = self.bucket.blob(blob_name)
-        blob.delete()
-        print(f"File {blob_name} deleted from {self.bucket_name}.")
-
-
-class Node:
-    def __init__(self, ip, btip):
-
-        #only works inside gcloud VM (metadata)
-        #self.externalip = self.get_extip()
-        #self.region = self.get_region()
-
-        self.nodeID = str(uuid.uuid4())[:9]
-        self.IP = self.get_ip();
-        #for local test
-        self.IP = ip
-        self.PORT = 8080
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock.bind((self.IP, self.PORT))
-        self.isBootstrap = True
-        self.bootstrapIp = ""
-        self.sender = Sender()
-        if (btip != "0"):
-            self.bootstrapIp = btip
-            self.doJoin()
-        else:
-            self.openListener()
-        
-
-
-    def get_ip(self):
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
-        return s.getsockname()[0]
-
-    # Get node external IP from gcloud metadata
-    def get_extip(self):
-        url = "http://metadata/computeMetadata/v1/instance/network-interfaces/0/access-configs/0/external-ip"
-        headers = {"Metadata-Flavor" : "Google"}
-        response = requests.get(url, headers=headers)
-
-        ##todo if status code good   
-        return response.json
-    
-    # Get node region from gcloud metadata
-    def get_region(self):
-        url = "http://metadata.google.internal/computeMetadata/v1/instance/zone"
-        headers = {"Metadata-Flavor" : "Google"}
-        response = requests.get(url, headers=headers)
-
-        ##todo if status code good   
-        return response.json
-    
-    # Open listening port
-    def openListener(self):
-        listen = Listener(self)
-
-    def doJoin(self):
-        self.openListener()
-        self.sender.simpleMsg(self.sock, (self.bootstrapIp, self.PORT), "P2P:JOIN")
+    return file_data
 
 if __name__ == "__main__":
-    #TODO make sure its an IP
-    #Give a bootstrap node or 0 if its a bootstrap node
-    if len(sys.argv)>1:
-        node = Node(sys.argv[2], sys.argv[1])
+    nodePort = 4444
+    nodeID = uuid.uuid4()
+    nodeZone = sys.argv[1]
+    nodeType = sys.argv[2]  # 0 --> orchestrator | 1 --> internal | 2 --> external
+    nodeHost = f"{get_ip()}:{nodePort}"
+    nodeFiles = {}
+
+    nodes          = []
+    external_nodes = []
+    buckets        = []
+
+    zone_split = nodeZone.split('-')
+    print(f"node init - {nodeHost}")
+
+    bucket_name = f"internal-ring-bucket-{nodeID}"
+    nodeLocation = f"{zone_split[0]}-{zone_split[1]}"  # Choose your desired location
+    json_objects = [
+        {
+            "maintainer-id": nodeHost,
+            "zone": nodeZone
+        }
+    ]
+    remote_file = "init.json"
+
+    if not check_bucket(bucket_name):
+        create_bucket(bucket_name, nodeLocation)
+        push_json_objects(bucket_name, json_objects, remote_file)
+        retrieved_json_objects = get_json_objects(bucket_name, remote_file)
+        print(retrieved_json_objects)
     else:
-        print("Wrong usage. ex: python3 node.py (bootstrap node IP)")
+        print(f"Bucket '{bucket_name}' already exists.")
+    buckets.append((bucket_name, nodeZone))
+
+    if nodeType != "0":
+        send_udp_message("JOIN", DEFAULT_ORCHESTRATOR_NODE[0], DEFAULT_ORCHESTRATOR_NODE[1])
+
+    print("SET 1/1")
+
+    receive_thread = threading.Thread(target=receive_udp_message, args=(nodePort,))
+    receive_thread.start()
+
+    debug_thread = threading.Thread(target=debug)
+    debug_thread.start()
+
+    receive_thread.join()
+    debug_thread.join()
+
+    # Clean up the temporary credentials file
+    subprocess.run(["rm", credentials_file])

@@ -206,22 +206,13 @@ def __init_lbs():
     lb_thread2.join()
 
 ## Create Internal Ring
-# ir_thread = threading.Thread(target=__init_ring)
-# ir_thread.start()
-# __init_ring()
-# __init_ring_node('internal-1', 'europe-west1-c', 1)
-# __init_ring_node('internal-3', 'us-west3-b', 1) 
-# __init_ring_node()
+__init_ring()
 
 ## Create Load Balancers (Client app)
-# __init_lb(zone='europe-west1-c')
-# __init_lbs()
-# ir_thread.join()
-# __init_lb()
-
+__init_lbs()
 # ---
 
 # __init_ring_node()
 # __init_ring_node('internal-1', 'europe-west1-c', 1)
 # __init_lb(zone='europe-west1-c')
-__init_lb(instance_name='lb-2', zone='europe-west1-c')
+# __init_lb(instance_name='lb-2', zone='europe-west1-c')
